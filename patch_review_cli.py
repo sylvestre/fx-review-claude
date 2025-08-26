@@ -45,7 +45,7 @@ def get_repo_info_from_url(url: str) -> Optional[Tuple[str, str, str]]:
             return f"https://github.com/{owner}/{repo}.git", owner, repo
     elif 'phabricator' in parsed_url.netloc and 'mozilla' in parsed_url.netloc:
         # Mozilla Phabricator - assume Firefox repo
-        return "https://github.com/mozilla-firefox/", "mozilla-firefox", "firefox"
+        return "https://github.com/mozilla-firefox/firefox/", "mozilla-firefox", "firefox"
 
     return None
 
@@ -265,20 +265,14 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
         # Try direct invocation without pipes - this avoids shell redirection issues
         try:
             print("Running: claude --print with direct prompt")
+            print(f"Prompt length: {len(prompt_content)} characters")
             result = subprocess.run(['claude', '--print', prompt_content],
                                   cwd=repo_path,
-                                  capture_output=True,
-                                  text=True,
                                   timeout=300)
 
-            if result.returncode == 0:
-                print("Analysis output:")
-                print(result.stdout)
-                success = True
-            else:
+            success = (result.returncode == 0)
+            if not success:
                 print(f"Claude failed with return code {result.returncode}")
-                if result.stderr:
-                    print(f"Error: {result.stderr}")
         except subprocess.TimeoutExpired:
             print("Claude timed out after 5 minutes")
         except FileNotFoundError:
@@ -287,17 +281,27 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
             print(f"Error running Claude: {e}")
 
         if not success:
-            print("All Claude invocation methods failed.")
-            print(f"Please manually run: cd {repo_path} && claude < {prompt_file_path}")
-            print(f"Or copy the prompt from: {prompt_file_path}")
+            print("Claude invocation failed.")
+            print(f"Please manually run: cd {repo_path} && claude --print \"$(cat {prompt_file_path})\"")
             return
 
         print("Analysis complete")
 
     finally:
-        # Keep temp file for manual use if needed
-        print(f"Prompt saved to: {prompt_file_path}")
-        print("You can delete it manually when done.")
+        # Always preserve the prompt file for follow-up questions
+        persistent_prompt_path = os.path.join(repo_path, f"claude-review-prompt-{os.getpid()}.txt")
+        try:
+            # Copy the file instead of renaming to handle cross-device links
+            import shutil
+            shutil.copy2(prompt_file_path, persistent_prompt_path)
+            os.unlink(prompt_file_path)  # Clean up the temp file
+            print(f"\nPrompt saved to: {persistent_prompt_path}")
+            print(f"For follow-up questions, run: cd {repo_path} && claude --print \"$(cat {persistent_prompt_path})\"")
+            print("Or simply: claude (and paste the prompt content)")
+        except Exception as e:
+            print(f"\nWarning: Could not save prompt to repo directory: {e}")
+            print(f"Prompt remains at: {prompt_file_path}")
+            print("You can copy it manually if needed.")
 
 
 def main():
