@@ -199,22 +199,16 @@ def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) 
 
 def analyze_with_claude(repo_path: str, language: str, url: str, custom_questions: Optional[str] = None, patch_content: Optional[str] = None) -> None:
     """Run Claude Code to analyze the repository changes."""
-    # Get the diff of current changes, or use provided patch content
-    if patch_content:
-        print("Using original patch content for analysis (patch application failed)")
-        diff_output = patch_content
-    else:
+    # Check if we have changes to analyze
+    if not patch_content:
         diff_output = run_command("git diff HEAD", cwd=repo_path)
         if not diff_output:
             print("No changes found to analyze")
             return
 
-    base_prompt = f"""I am a {language} developer, I need to review this patch.
+    base_prompt = f"""I am a {language} developer, I need to review this patch from: {url}
 
-Here is the patch content:
-```patch
-{diff_output}
-```
+Load the current changes with 'git diff' and analyze them.
 
 First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
 filename:line_number "comment"
