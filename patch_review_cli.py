@@ -256,29 +256,34 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
             prompt_content = f.read()
 
         success = False
-        # Try direct invocation without pipes - this avoids shell redirection issues
+        # Try direct invocation without capturing output - let it display directly
         try:
             print("Running: claude --print with direct prompt")
             print(f"Prompt length: {len(prompt_content)} characters")
+            print("\n" + "="*80)
+            print("CLAUDE ANALYSIS OUTPUT:")
+            print("="*80 + "\n")
+
             result = subprocess.run(['claude', '--print', prompt_content],
                                   cwd=repo_path,
                                   timeout=300)
 
             success = (result.returncode == 0)
             if not success:
-                print(f"Claude failed with return code {result.returncode}")
+                print(f"\nClaude failed with return code {result.returncode}")
         except subprocess.TimeoutExpired:
-            print("Claude timed out after 5 minutes")
+            print("\nClaude timed out after 5 minutes")
         except FileNotFoundError:
-            print("Error: 'claude' command not found. Please ensure Claude Code CLI is installed.")
+            print("\nError: 'claude' command not found. Please ensure Claude Code CLI is installed.")
         except Exception as e:
-            print(f"Error running Claude: {e}")
+            print(f"\nError running Claude: {e}")
 
         if not success:
-            print("Claude invocation failed.")
+            print("\nClaude invocation failed.")
             print(f"Please manually run: cd {repo_path} && claude --print \"$(cat {prompt_file_path})\"")
             return
 
+        print("\n" + "="*80)
         print("Analysis complete")
 
     finally:
@@ -395,13 +400,17 @@ Then analyze the patch overall and answer these questions:
             prompt_temp_file_path = prompt_temp_file.name
 
         try:
-            # Try file-based approach with --print flag
-            result = subprocess.run(f"claude --print < {prompt_temp_file_path}", shell=True, capture_output=True, text=True)
+            # Try file-based approach with --print flag, display output directly
+            print("\n" + "="*80)
+            print("CLAUDE ANALYSIS OUTPUT:")
+            print("="*80 + "\n")
+
+            result = subprocess.run(f"claude --print < {prompt_temp_file_path}", shell=True)
             if result.returncode == 0:
-                print("Analysis output:")
-                print(result.stdout)
+                print("\n" + "="*80)
+                print("Analysis complete")
             else:
-                print(f"Error running Claude: {result.stderr}")
+                print(f"\nError: Claude failed with return code {result.returncode}")
                 print(f"Please manually run: claude --print < {prompt_temp_file_path}")
         except Exception as e:
             print(f"Error running Claude Code: {e}", file=sys.stderr)
