@@ -199,18 +199,28 @@ def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) 
 
 def analyze_with_claude(repo_path: str, language: str, url: str, custom_questions: Optional[str] = None, patch_content: Optional[str] = None) -> None:
     """Run Claude Code to analyze the repository changes."""
-    # Check if we have changes to analyze
-    if not patch_content:
+    # Build the base prompt with common instructions
+    base_prompt = f"I am a {language} developer, I need to review this patch from: {url}\n\n"
+
+    # Add patch content or git diff instruction
+    if patch_content:
+        # We have the patch content directly - use it
+        base_prompt += f"""Here is the patch content:
+```patch
+{patch_content}
+```
+
+"""
+    else:
+        # No patch content provided - ask Claude to load changes from git
         diff_output = run_command("git diff HEAD", cwd=repo_path)
         if not diff_output:
             print("No changes found to analyze")
             return
+        base_prompt += "Load the current changes with 'git diff' and analyze them.\n\n"
 
-    base_prompt = f"""I am a {language} developer, I need to review this patch from: {url}
-
-Load the current changes with 'git diff' and analyze them.
-
-First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
+    # Add common review instructions
+    base_prompt += """First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
 filename:line_number "comment"
 
 Only include lines that have problems, potential bugs, improvements needed, or other issues.
@@ -258,13 +268,15 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
         success = False
         # Try direct invocation without capturing output - let it display directly
         try:
-            print("Running: claude --print with direct prompt")
+            print("Running: claude --print with prompt via stdin")
             print(f"Prompt length: {len(prompt_content)} characters")
             print("\n" + "="*80)
             print("CLAUDE ANALYSIS OUTPUT:")
             print("="*80 + "\n")
 
-            result = subprocess.run(['claude', '--print', prompt_content],
+            result = subprocess.run(['claude', '--print'],
+                                  input=prompt_content,
+                                  text=True,
                                   cwd=repo_path,
                                   timeout=300)
 
@@ -400,17 +412,20 @@ Then analyze the patch overall and answer these questions:
             prompt_temp_file_path = prompt_temp_file.name
 
         try:
-            # Try file-based approach with --print flag, display output directly
+            # Pass prompt via stdin to avoid argument length limits
             print("\n" + "="*80)
             print("CLAUDE ANALYSIS OUTPUT:")
             print("="*80 + "\n")
 
-            result = subprocess.run(f"claude --print < {prompt_temp_file_path}", shell=True)
+            result = subprocess.run(['claude', '--print'],
+                                  input=base_prompt,
+                                  text=True)
             if result.returncode == 0:
                 print("\n" + "="*80)
                 print("Analysis complete")
             else:
                 print(f"\nError: Claude failed with return code {result.returncode}")
+                print(f"Prompt saved to: {prompt_temp_file_path}")
                 print(f"Please manually run: claude --print < {prompt_temp_file_path}")
         except Exception as e:
             print(f"Error running Claude Code: {e}", file=sys.stderr)
