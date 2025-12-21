@@ -220,22 +220,25 @@ def analyze_with_claude(repo_path: str, language: str, url: str, custom_question
         base_prompt += "Load the current changes with 'git diff' and analyze them.\n\n"
 
     # Add common review instructions
-    base_prompt += """First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
-filename:line_number "comment"
-
-Only include lines that have problems, potential bugs, improvements needed, or other issues.
-For example:
-src/main.rs:45 "Consider using unwrap_or_else() instead of unwrap() to handle potential errors"
-lib/parser.rs:123 "This variable name 'x' is not descriptive, consider a more meaningful name"
-
-If there are no issues with specific lines, just write "No line-specific issues found."
-
-Then analyze the patch overall and answer these questions:
+    base_prompt += """Analyze the patch overall and answer these questions:
 * What does this patch do? Provide a brief summary.
 * Are there any potential improvements to this patch?
 * Is there any code duplication that could be reduced?
 * Are there any potential performance improvements?
-* Are there any potential bugs or edge cases not handled?"""
+* Are there any potential bugs or edge cases not handled?
+
+At the end of the output, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
+filename:line_number severity "comment"
+Try to give some severity information: "PEDANTIC", "LOW", "MEDIUM" or "HIGH"
+
+Only include lines that have problems, potential bugs, improvements needed, pedantic, deduplication or other issues.
+For example:
+src/main.rs:45 LOW "Consider using unwrap_or_else() instead of unwrap() to handle potential errors"
+lib/parser.rs:123 HIGH "This variable name 'x' is not descriptive, consider a more meaningful name"
+
+If there are no issues with specific lines, just write "No line-specific issues found."
+
+"""
 
     if custom_questions:
         base_prompt += f"\n\nAdditional questions:\n{custom_questions}"
