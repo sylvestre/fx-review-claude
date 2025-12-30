@@ -85,10 +85,10 @@ def download_github_patch(url: str) -> str:
 
     if pr_match:
         owner, repo, pr_num = pr_match.groups()
-        patch_url = f"https://github.com/{owner}/{repo}/pull/{pr_num}.patch"
+        patch_url = f"https://github.com/{owner}/{repo}/pull/{pr_num}.diff"
     elif commit_match:
         owner, repo, commit = commit_match.groups()
-        patch_url = f"https://github.com/{owner}/{repo}/commit/{commit}.patch"
+        patch_url = f"https://github.com/{owner}/{repo}/commit/{commit}.diff"
     else:
         raise ValueError("Invalid GitHub URL. Expected PR or commit URL.")
 
@@ -111,6 +111,112 @@ def download_phabricator_patch(url: str) -> str:
     response = requests.get(patch_url)
     response.raise_for_status()
     return response.text
+
+
+def fetch_github_pr_comments(url: str) -> str:
+    """Fetch all comments from a GitHub PR (review comments + issue comments)."""
+    pr_match = re.match(r'https://github\.com/([^/]+)/([^/]+)/pull/(\d+)', url)
+    if not pr_match:
+        return ""
+
+    owner, repo, pr_num = pr_match.groups()
+    all_comments = []
+
+    # Check for GitHub token for authentication (avoid rate limits)
+    headers = {}
+    github_token = os.environ.get('GITHUB_TOKEN')
+    if github_token:
+        headers['Authorization'] = f'token {github_token}'
+
+    try:
+        # Fetch review comments (inline code comments)
+        review_comments_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}/comments"
+        response = requests.get(review_comments_url, headers=headers)
+        if response.status_code == 200:
+            review_comments = response.json()
+            for comment in review_comments:
+                user = comment.get('user', {}).get('login', 'Unknown')
+                body = comment.get('body', '')
+                path = comment.get('path', 'N/A')
+                line = comment.get('line', 'N/A')
+                all_comments.append(f"Review comment by {user} on {path}:{line}\n{body}")
+
+        # Fetch general PR comments
+        issue_comments_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_num}/comments"
+        response = requests.get(issue_comments_url, headers=headers)
+        if response.status_code == 200:
+            issue_comments = response.json()
+            for comment in issue_comments:
+                user = comment.get('user', {}).get('login', 'Unknown')
+                body = comment.get('body', '')
+                all_comments.append(f"General comment by {user}\n{body}")
+
+        # Fetch PR reviews (approve/request changes/comment)
+        reviews_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}/reviews"
+        response = requests.get(reviews_url, headers=headers)
+        if response.status_code == 200:
+            reviews = response.json()
+            for review in reviews:
+                user = review.get('user', {}).get('login', 'Unknown')
+                state = review.get('state', 'COMMENTED')
+                body = review.get('body', '')
+                if body:  # Only include reviews with text
+                    all_comments.append(f"Review by {user} ({state})\n{body}")
+    except Exception as e:
+        print(f"Warning: Failed to fetch some GitHub comments: {e}")
+
+    if all_comments:
+        return "\n\n" + "="*80 + "\nEXISTING COMMENTS/REVIEWS:\n" + "="*80 + "\n\n" + "\n\n---\n\n".join(all_comments) + "\n\n" + "="*80 + "\n"
+    return ""
+
+
+def fetch_github_commit_comments(url: str) -> str:
+    """Fetch comments from a GitHub commit."""
+    commit_match = re.match(r'https://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]+)', url)
+    if not commit_match:
+        return ""
+
+    owner, repo, commit_sha = commit_match.groups()
+    all_comments = []
+
+    # Check for GitHub token for authentication (avoid rate limits)
+    headers = {}
+    github_token = os.environ.get('GITHUB_TOKEN')
+    if github_token:
+        headers['Authorization'] = f'token {github_token}'
+
+    try:
+        comments_url = f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}/comments"
+        response = requests.get(comments_url, headers=headers)
+        if response.status_code == 200:
+            comments = response.json()
+            for comment in comments:
+                user = comment.get('user', {}).get('login', 'Unknown')
+                body = comment.get('body', '')
+                path = comment.get('path', 'N/A')
+                line = comment.get('line', 'N/A')
+                all_comments.append(f"Comment by {user} on {path}:{line}\n{body}")
+    except Exception as e:
+        print(f"Warning: Failed to fetch GitHub commit comments: {e}")
+
+    if all_comments:
+        return "\n\n" + "="*80 + "\nEXISTING COMMENTS:\n" + "="*80 + "\n\n" + "\n\n---\n\n".join(all_comments) + "\n\n" + "="*80 + "\n"
+    return ""
+
+
+def fetch_phabricator_comments(url: str) -> str:
+    """Fetch comments from a Phabricator differential."""
+    match = re.match(r'(https://[^/]+)/D(\d+)', url)
+    if not match:
+        return ""
+
+    base_url, diff_id = match.groups()
+
+    # Phabricator's public API requires authentication, so we'll try to scrape
+    # or use the Conduit API if available. For now, return empty string.
+    # Users can implement this with their Phabricator credentials if needed.
+    print("Note: Phabricator comment fetching requires API authentication (not yet implemented)")
+    return ""
 
 
 def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) -> bool:
@@ -197,7 +303,7 @@ def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) 
         os.unlink(patch_file)
 
 
-def analyze_with_claude(repo_path: str, language: str, url: str, custom_questions: Optional[str] = None, patch_content: Optional[str] = None) -> None:
+def analyze_with_claude(repo_path: str, language: str, url: str, custom_questions: Optional[str] = None, patch_content: Optional[str] = None, existing_comments: Optional[str] = None) -> None:
     """Run Claude Code to analyze the repository changes."""
     # Build the base prompt with common instructions
     base_prompt = f"I am a {language} developer, I need to review this patch from: {url}\n\n"
@@ -218,6 +324,11 @@ def analyze_with_claude(repo_path: str, language: str, url: str, custom_question
             print("No changes found to analyze")
             return
         base_prompt += "Load the current changes with 'git diff' and analyze them.\n\n"
+
+    # Add existing comments/reviews if available
+    if existing_comments:
+        base_prompt += existing_comments
+        base_prompt += "\nPlease consider the above existing comments/reviews when providing your analysis.\n\n"
 
     # Add common review instructions
     base_prompt += """Analyze the patch overall and answer these questions:
@@ -378,6 +489,26 @@ def main():
         print(f"Error downloading patch: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Fetch existing comments/reviews
+    print("Fetching existing comments and reviews...")
+    existing_comments = ""
+    try:
+        parsed_url = urlparse(args.url)
+        if 'github.com' in parsed_url.netloc:
+            if '/pull/' in args.url:
+                existing_comments = fetch_github_pr_comments(args.url)
+            elif '/commit/' in args.url:
+                existing_comments = fetch_github_commit_comments(args.url)
+        elif parsed_url.path.startswith('/D'):
+            existing_comments = fetch_phabricator_comments(args.url)
+    except Exception as e:
+        print(f"Warning: Failed to fetch comments: {e}")
+
+    if existing_comments:
+        print("Successfully fetched existing comments/reviews")
+    else:
+        print("No existing comments found or unable to fetch")
+
     if args.no_checkout:
         # Just analyze the patch content directly
         print("Analyzing patch without repository checkout...")
@@ -392,7 +523,14 @@ Here is the patch content:
 {patch_content}
 ```
 
-First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
+"""
+
+        # Add existing comments if available
+        if existing_comments:
+            base_prompt += existing_comments
+            base_prompt += "\nPlease consider the above existing comments/reviews when providing your analysis.\n\n"
+
+        base_prompt += """First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
 filename:line_number "comment"
 
 Only include lines that have problems, potential bugs, improvements needed, or other issues.
@@ -452,10 +590,10 @@ Then analyze the patch overall and answer these questions:
 
     # Analyze with Claude - pass original patch content if application failed
     if patch_applied and not args.no_apply:
-        analyze_with_claude(repo_path, args.language, args.url, args.questions)
+        analyze_with_claude(repo_path, args.language, args.url, args.questions, None, existing_comments)
     else:
         # Use original patch content for analysis
-        analyze_with_claude(repo_path, args.language, args.url, args.questions, patch_content)
+        analyze_with_claude(repo_path, args.language, args.url, args.questions, patch_content, existing_comments)
 
 
 if __name__ == "__main__":
