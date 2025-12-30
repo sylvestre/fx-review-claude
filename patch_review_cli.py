@@ -19,7 +19,9 @@ def run_command(cmd, cwd=None, capture=True):
     """Run a shell command and optionally capture output."""
     try:
         if capture:
-            result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+            result = subprocess.run(
+                cmd, shell=True, cwd=cwd, capture_output=True, text=True
+            )
             if result.returncode != 0:
                 print(f"Command failed: {cmd}")
                 print(f"Error: {result.stderr}")
@@ -37,20 +39,26 @@ def get_repo_info_from_url(url: str) -> Optional[Tuple[str, str, str]]:
     """Extract repository information from GitHub/Phabricator URL."""
     parsed_url = urlparse(url)
 
-    if 'github.com' in parsed_url.netloc:
+    if "github.com" in parsed_url.netloc:
         # GitHub URL: https://github.com/owner/repo/pull/123 or commit/hash
-        path_parts = parsed_url.path.strip('/').split('/')
+        path_parts = parsed_url.path.strip("/").split("/")
         if len(path_parts) >= 2:
             owner, repo = path_parts[0], path_parts[1]
             return f"https://github.com/{owner}/{repo}.git", owner, repo
-    elif 'phabricator' in parsed_url.netloc and 'mozilla' in parsed_url.netloc:
+    elif "phabricator" in parsed_url.netloc and "mozilla" in parsed_url.netloc:
         # Mozilla Phabricator - assume Firefox repo
-        return "https://github.com/mozilla-firefox/firefox/", "mozilla-firefox", "firefox"
+        return (
+            "https://github.com/mozilla-firefox/firefox/",
+            "mozilla-firefox",
+            "firefox",
+        )
 
     return None
 
 
-def ensure_repository(repo_url: str, owner: str, repo: str, base_dir: str = "~/repos") -> Optional[str]:
+def ensure_repository(
+    repo_url: str, owner: str, repo: str, base_dir: str = "~/repos"
+) -> Optional[str]:
     """Ensure repository is cloned locally and return the path."""
     base_path = Path(base_dir).expanduser()
     repo_path = base_path / owner / repo
@@ -80,8 +88,10 @@ def ensure_repository(repo_url: str, owner: str, repo: str, base_dir: str = "~/r
 def download_github_patch(url: str) -> str:
     """Download a patch from GitHub PR or commit URL."""
     # Parse GitHub URL patterns
-    pr_match = re.match(r'https://github\.com/([^/]+)/([^/]+)/pull/(\d+)', url)
-    commit_match = re.match(r'https://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]+)', url)
+    pr_match = re.match(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)", url)
+    commit_match = re.match(
+        r"https://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]+)", url
+    )
 
     if pr_match:
         owner, repo, pr_num = pr_match.groups()
@@ -100,9 +110,11 @@ def download_github_patch(url: str) -> str:
 def download_phabricator_patch(url: str) -> str:
     """Download a patch from Phabricator differential URL."""
     # Parse Phabricator URL pattern
-    match = re.match(r'(https://[^/]+)/D(\d+)', url)
+    match = re.match(r"(https://[^/]+)/D(\d+)", url)
     if not match:
-        raise ValueError("Invalid Phabricator URL. Expected format: https://domain/D123456")
+        raise ValueError(
+            "Invalid Phabricator URL. Expected format: https://domain/D123456"
+        )
 
     base_url, diff_id = match.groups()
 
@@ -115,7 +127,7 @@ def download_phabricator_patch(url: str) -> str:
 
 def fetch_github_pr_comments(url: str) -> str:
     """Fetch all comments from a GitHub PR (review comments + issue comments)."""
-    pr_match = re.match(r'https://github\.com/([^/]+)/([^/]+)/pull/(\d+)', url)
+    pr_match = re.match(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)", url)
     if not pr_match:
         return ""
 
@@ -124,55 +136,75 @@ def fetch_github_pr_comments(url: str) -> str:
 
     # Check for GitHub token for authentication (avoid rate limits)
     headers = {}
-    github_token = os.environ.get('GITHUB_TOKEN')
+    github_token = os.environ.get("GITHUB_TOKEN")
     if github_token:
-        headers['Authorization'] = f'token {github_token}'
+        headers["Authorization"] = f"token {github_token}"
 
     try:
         # Fetch review comments (inline code comments)
-        review_comments_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}/comments"
+        review_comments_url = (
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}/comments"
+        )
         response = requests.get(review_comments_url, headers=headers)
         if response.status_code == 200:
             review_comments = response.json()
             for comment in review_comments:
-                user = comment.get('user', {}).get('login', 'Unknown')
-                body = comment.get('body', '')
-                path = comment.get('path', 'N/A')
-                line = comment.get('line', 'N/A')
-                all_comments.append(f"Review comment by {user} on {path}:{line}\n{body}")
+                user = comment.get("user", {}).get("login", "Unknown")
+                body = comment.get("body", "")
+                path = comment.get("path", "N/A")
+                line = comment.get("line", "N/A")
+                all_comments.append(
+                    f"Review comment by {user} on {path}:{line}\n{body}"
+                )
 
         # Fetch general PR comments
-        issue_comments_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_num}/comments"
+        issue_comments_url = (
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_num}/comments"
+        )
         response = requests.get(issue_comments_url, headers=headers)
         if response.status_code == 200:
             issue_comments = response.json()
             for comment in issue_comments:
-                user = comment.get('user', {}).get('login', 'Unknown')
-                body = comment.get('body', '')
+                user = comment.get("user", {}).get("login", "Unknown")
+                body = comment.get("body", "")
                 all_comments.append(f"General comment by {user}\n{body}")
 
         # Fetch PR reviews (approve/request changes/comment)
-        reviews_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}/reviews"
+        reviews_url = (
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}/reviews"
+        )
         response = requests.get(reviews_url, headers=headers)
         if response.status_code == 200:
             reviews = response.json()
             for review in reviews:
-                user = review.get('user', {}).get('login', 'Unknown')
-                state = review.get('state', 'COMMENTED')
-                body = review.get('body', '')
+                user = review.get("user", {}).get("login", "Unknown")
+                state = review.get("state", "COMMENTED")
+                body = review.get("body", "")
                 if body:  # Only include reviews with text
                     all_comments.append(f"Review by {user} ({state})\n{body}")
     except Exception as e:
         print(f"Warning: Failed to fetch some GitHub comments: {e}")
 
     if all_comments:
-        return "\n\n" + "="*80 + "\nEXISTING COMMENTS/REVIEWS:\n" + "="*80 + "\n\n" + "\n\n---\n\n".join(all_comments) + "\n\n" + "="*80 + "\n"
+        return (
+            "\n\n"
+            + "=" * 80
+            + "\nEXISTING COMMENTS/REVIEWS:\n"
+            + "=" * 80
+            + "\n\n"
+            + "\n\n---\n\n".join(all_comments)
+            + "\n\n"
+            + "=" * 80
+            + "\n"
+        )
     return ""
 
 
 def fetch_github_commit_comments(url: str) -> str:
     """Fetch comments from a GitHub commit."""
-    commit_match = re.match(r'https://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]+)', url)
+    commit_match = re.match(
+        r"https://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]+)", url
+    )
     if not commit_match:
         return ""
 
@@ -181,32 +213,44 @@ def fetch_github_commit_comments(url: str) -> str:
 
     # Check for GitHub token for authentication (avoid rate limits)
     headers = {}
-    github_token = os.environ.get('GITHUB_TOKEN')
+    github_token = os.environ.get("GITHUB_TOKEN")
     if github_token:
-        headers['Authorization'] = f'token {github_token}'
+        headers["Authorization"] = f"token {github_token}"
 
     try:
-        comments_url = f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}/comments"
+        comments_url = (
+            f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}/comments"
+        )
         response = requests.get(comments_url, headers=headers)
         if response.status_code == 200:
             comments = response.json()
             for comment in comments:
-                user = comment.get('user', {}).get('login', 'Unknown')
-                body = comment.get('body', '')
-                path = comment.get('path', 'N/A')
-                line = comment.get('line', 'N/A')
+                user = comment.get("user", {}).get("login", "Unknown")
+                body = comment.get("body", "")
+                path = comment.get("path", "N/A")
+                line = comment.get("line", "N/A")
                 all_comments.append(f"Comment by {user} on {path}:{line}\n{body}")
     except Exception as e:
         print(f"Warning: Failed to fetch GitHub commit comments: {e}")
 
     if all_comments:
-        return "\n\n" + "="*80 + "\nEXISTING COMMENTS:\n" + "="*80 + "\n\n" + "\n\n---\n\n".join(all_comments) + "\n\n" + "="*80 + "\n"
+        return (
+            "\n\n"
+            + "=" * 80
+            + "\nEXISTING COMMENTS:\n"
+            + "=" * 80
+            + "\n\n"
+            + "\n\n---\n\n".join(all_comments)
+            + "\n\n"
+            + "=" * 80
+            + "\n"
+        )
     return ""
 
 
 def fetch_phabricator_comments(url: str) -> str:
     """Fetch comments from a Phabricator differential."""
-    match = re.match(r'(https://[^/]+)/D(\d+)', url)
+    match = re.match(r"(https://[^/]+)/D(\d+)", url)
     if not match:
         return ""
 
@@ -215,7 +259,9 @@ def fetch_phabricator_comments(url: str) -> str:
     # Phabricator's public API requires authentication, so we'll try to scrape
     # or use the Conduit API if available. For now, return empty string.
     # Users can implement this with their Phabricator credentials if needed.
-    print("Note: Phabricator comment fetching requires API authentication (not yet implemented)")
+    print(
+        "Note: Phabricator comment fetching requires API authentication (not yet implemented)"
+    )
     return ""
 
 
@@ -229,7 +275,11 @@ def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) 
         status_output = run_command("git status --porcelain", cwd=repo_path)
         if status_output:
             print("Found uncommitted changes, stashing them...")
-            if not run_command("git stash push -u -m 'Automated stash before patch review'", cwd=repo_path, capture=False):
+            if not run_command(
+                "git stash push -u -m 'Automated stash before patch review'",
+                cwd=repo_path,
+                capture=False,
+            ):
                 print("Failed to stash changes, trying hard reset...")
                 run_command("git reset --hard HEAD", cwd=repo_path, capture=False)
                 run_command("git clean -fd", cwd=repo_path, capture=False)
@@ -239,9 +289,11 @@ def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) 
         print(f"Creating branch: {branch_name}")
 
         # Ensure we're on main/master and it's up to date
-        main_branch = run_command("git symbolic-ref refs/remotes/origin/HEAD", cwd=repo_path)
+        main_branch = run_command(
+            "git symbolic-ref refs/remotes/origin/HEAD", cwd=repo_path
+        )
         if main_branch:
-            main_branch = main_branch.split('/')[-1]
+            main_branch = main_branch.split("/")[-1]
         else:
             # Try to detect main branch
             branches = run_command("git branch -r", cwd=repo_path)
@@ -257,12 +309,14 @@ def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) 
         print(f"Updating {main_branch} branch...")
         run_command(f"git pull origin {main_branch}", cwd=repo_path, capture=False)
 
-        if not run_command(f"git checkout -b {branch_name}", cwd=repo_path, capture=False):
+        if not run_command(
+            f"git checkout -b {branch_name}", cwd=repo_path, capture=False
+        ):
             print("Error: Failed to create branch")
             return False
 
     # Save patch to temporary file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as f:
         f.write(patch_content)
         patch_file = f.name
 
@@ -283,7 +337,9 @@ def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) 
 
         # Method 3: Try git apply with whitespace fixes
         print("Standard apply failed, trying with whitespace fixes...")
-        if run_command(f"git apply --whitespace=fix {patch_file}", cwd=repo_path, capture=False):
+        if run_command(
+            f"git apply --whitespace=fix {patch_file}", cwd=repo_path, capture=False
+        ):
             print("Patch applied successfully with whitespace fixes")
             return True
 
@@ -303,10 +359,19 @@ def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) 
         os.unlink(patch_file)
 
 
-def analyze_with_claude(repo_path: str, language: str, url: str, custom_questions: Optional[str] = None, patch_content: Optional[str] = None, existing_comments: Optional[str] = None) -> None:
+def analyze_with_claude(
+    repo_path: str,
+    language: str,
+    url: str,
+    custom_questions: Optional[str] = None,
+    patch_content: Optional[str] = None,
+    existing_comments: Optional[str] = None,
+) -> None:
     """Run Claude Code to analyze the repository changes."""
     # Build the base prompt with common instructions
-    base_prompt = f"I am a {language} developer, I need to review this patch from: {url}\n\n"
+    base_prompt = (
+        f"I am a {language} developer, I need to review this patch from: {url}\n\n"
+    )
 
     # Add patch content or git diff instruction
     if patch_content:
@@ -366,7 +431,9 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
 --- COPY-PASTE SUMMARY END ---"""
 
     # Write prompt to temporary file to avoid shell escaping issues
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as prompt_file:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False
+    ) as prompt_file:
         prompt_file.write(base_prompt)
         prompt_file_path = prompt_file.name
 
@@ -376,7 +443,7 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
         print(f"Working directory: {repo_path}")
 
         # Read the prompt content directly
-        with open(prompt_file_path, 'r') as f:
+        with open(prompt_file_path, "r") as f:
             prompt_content = f.read()
 
         success = False
@@ -384,44 +451,55 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
         try:
             print("Running: claude --print with prompt via stdin")
             print(f"Prompt length: {len(prompt_content)} characters")
-            print("\n" + "="*80)
+            print("\n" + "=" * 80)
             print("CLAUDE ANALYSIS OUTPUT:")
-            print("="*80 + "\n")
+            print("=" * 80 + "\n")
 
-            result = subprocess.run(['claude', '--print'],
-                                  input=prompt_content,
-                                  text=True,
-                                  cwd=repo_path,
-                                  timeout=300)
+            result = subprocess.run(
+                ["claude", "--print"],
+                input=prompt_content,
+                text=True,
+                cwd=repo_path,
+                timeout=300,
+            )
 
-            success = (result.returncode == 0)
+            success = result.returncode == 0
             if not success:
                 print(f"\nClaude failed with return code {result.returncode}")
         except subprocess.TimeoutExpired:
             print("\nClaude timed out after 5 minutes")
         except FileNotFoundError:
-            print("\nError: 'claude' command not found. Please ensure Claude Code CLI is installed.")
+            print(
+                "\nError: 'claude' command not found. Please ensure Claude Code CLI is installed."
+            )
         except Exception as e:
             print(f"\nError running Claude: {e}")
 
         if not success:
             print("\nClaude invocation failed.")
-            print(f"Please manually run: cd {repo_path} && claude --print \"$(cat {prompt_file_path})\"")
+            print(
+                f'Please manually run: cd {repo_path} && claude --print "$(cat {prompt_file_path})"'
+            )
             return
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("Analysis complete")
 
     finally:
         # Always preserve the prompt file for follow-up questions
-        persistent_prompt_path = os.path.join(repo_path, f"claude-review-prompt-{os.getpid()}.txt")
+        persistent_prompt_path = os.path.join(
+            repo_path, f"claude-review-prompt-{os.getpid()}.txt"
+        )
         try:
             # Copy the file instead of renaming to handle cross-device links
             import shutil
+
             shutil.copy2(prompt_file_path, persistent_prompt_path)
             os.unlink(prompt_file_path)  # Clean up the temp file
             print(f"\nPrompt saved to: {persistent_prompt_path}")
-            print(f"For follow-up questions, run: cd {repo_path} && claude --print \"$(cat {persistent_prompt_path})\"")
+            print(
+                f'For follow-up questions, run: cd {repo_path} && claude --print "$(cat {persistent_prompt_path})"'
+            )
             print("Or simply: claude (and paste the prompt content)")
         except Exception as e:
             print(f"\nWarning: Could not save prompt to repo directory: {e}")
@@ -434,32 +512,32 @@ def main():
         description="Download patches, checkout repos, apply patches, and analyze with Claude Code"
     )
     parser.add_argument(
-        "url",
-        help="GitHub PR/commit URL or Phabricator differential URL"
+        "url", help="GitHub PR/commit URL or Phabricator differential URL"
     )
     parser.add_argument(
-        "-l", "--language",
+        "-l",
+        "--language",
         default="Rust",
-        help="Programming language for the review context (default: Rust)"
+        help="Programming language for the review context (default: Rust)",
     )
     parser.add_argument(
-        "-d", "--base-dir",
+        "-d",
+        "--base-dir",
         default="~/repos",
-        help="Base directory for repositories (default: ~/repos)"
+        help="Base directory for repositories (default: ~/repos)",
     )
     parser.add_argument(
-        "-q", "--questions",
-        help="Additional questions to ask Claude about the patch"
+        "-q", "--questions", help="Additional questions to ask Claude about the patch"
     )
     parser.add_argument(
         "--no-checkout",
         action="store_true",
-        help="Don't checkout/clone repository, only analyze patch"
+        help="Don't checkout/clone repository, only analyze patch",
     )
     parser.add_argument(
         "--no-apply",
         action="store_true",
-        help="Don't apply patch to repository, only analyze the diff"
+        help="Don't apply patch to repository, only analyze the diff",
     )
 
     args = parser.parse_args()
@@ -467,7 +545,10 @@ def main():
     # Get repository information from URL
     repo_info = get_repo_info_from_url(args.url)
     if not repo_info:
-        print(f"Error: Could not extract repository information from URL: {args.url}", file=sys.stderr)
+        print(
+            f"Error: Could not extract repository information from URL: {args.url}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     repo_url, owner, repo = repo_info
@@ -476,14 +557,17 @@ def main():
     # Download the patch
     try:
         parsed_url = urlparse(args.url)
-        if 'github.com' in parsed_url.netloc:
+        if "github.com" in parsed_url.netloc:
             print(f"Downloading patch from GitHub: {args.url}")
             patch_content = download_github_patch(args.url)
-        elif parsed_url.path.startswith('/D'):
+        elif parsed_url.path.startswith("/D"):
             print(f"Downloading patch from Phabricator: {args.url}")
             patch_content = download_phabricator_patch(args.url)
         else:
-            print(f"Error: Unsupported URL format. Expected GitHub or Phabricator URL.", file=sys.stderr)
+            print(
+                f"Error: Unsupported URL format. Expected GitHub or Phabricator URL.",
+                file=sys.stderr,
+            )
             sys.exit(1)
     except Exception as e:
         print(f"Error downloading patch: {e}", file=sys.stderr)
@@ -494,12 +578,12 @@ def main():
     existing_comments = ""
     try:
         parsed_url = urlparse(args.url)
-        if 'github.com' in parsed_url.netloc:
-            if '/pull/' in args.url:
+        if "github.com" in parsed_url.netloc:
+            if "/pull/" in args.url:
                 existing_comments = fetch_github_pr_comments(args.url)
-            elif '/commit/' in args.url:
+            elif "/commit/" in args.url:
                 existing_comments = fetch_github_commit_comments(args.url)
-        elif parsed_url.path.startswith('/D'):
+        elif parsed_url.path.startswith("/D"):
             existing_comments = fetch_phabricator_comments(args.url)
     except Exception as e:
         print(f"Warning: Failed to fetch comments: {e}")
@@ -512,7 +596,7 @@ def main():
     if args.no_checkout:
         # Just analyze the patch content directly
         print("Analyzing patch without repository checkout...")
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as f:
             f.write(patch_content)
             patch_file = f.name
 
@@ -548,21 +632,21 @@ Then analyze the patch overall and answer these questions:
             base_prompt += f"\n\nAdditional questions:\n{args.questions}"
 
         # Write prompt to file and use file-based approach
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as prompt_temp_file:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False
+        ) as prompt_temp_file:
             prompt_temp_file.write(base_prompt)
             prompt_temp_file_path = prompt_temp_file.name
 
         try:
             # Pass prompt via stdin to avoid argument length limits
-            print("\n" + "="*80)
+            print("\n" + "=" * 80)
             print("CLAUDE ANALYSIS OUTPUT:")
-            print("="*80 + "\n")
+            print("=" * 80 + "\n")
 
-            result = subprocess.run(['claude', '--print'],
-                                  input=base_prompt,
-                                  text=True)
+            result = subprocess.run(["claude", "--print"], input=base_prompt, text=True)
             if result.returncode == 0:
-                print("\n" + "="*80)
+                print("\n" + "=" * 80)
                 print("Analysis complete")
             else:
                 print(f"\nError: Claude failed with return code {result.returncode}")
@@ -586,14 +670,25 @@ Then analyze the patch overall and answer these questions:
         # Apply the patch
         patch_applied = apply_patch(patch_content, repo_path)
         if not patch_applied:
-            print("Warning: Failed to apply patch, but continuing with analysis using original patch content...")
+            print(
+                "Warning: Failed to apply patch, but continuing with analysis using original patch content..."
+            )
 
     # Analyze with Claude - pass original patch content if application failed
     if patch_applied and not args.no_apply:
-        analyze_with_claude(repo_path, args.language, args.url, args.questions, None, existing_comments)
+        analyze_with_claude(
+            repo_path, args.language, args.url, args.questions, None, existing_comments
+        )
     else:
         # Use original patch content for analysis
-        analyze_with_claude(repo_path, args.language, args.url, args.questions, patch_content, existing_comments)
+        analyze_with_claude(
+            repo_path,
+            args.language,
+            args.url,
+            args.questions,
+            patch_content,
+            existing_comments,
+        )
 
 
 if __name__ == "__main__":
