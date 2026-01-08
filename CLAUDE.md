@@ -89,9 +89,17 @@ Builds structured prompts that mirror the Firefox extension's review format:
 - Includes patch content directly (if patch application failed) or instructs Claude to use `git diff`
 - Inserts existing comments/reviews from the PR/commit (if available)
 - Instructs Claude to consider existing feedback when analyzing
-- Standard questions: summary, improvements, duplication, performance, bugs/edge cases
+- Directive prompts that **require concrete code examples** for every suggestion:
+  - Improvements to the patch (with exact code snippets)
+  - Reducing code duplication (showing the refactored code)
+  - Performance optimizations (with concrete examples)
+  - Fixing bugs and handling edge cases (providing the actual code fix)
+  - Refactoring opportunities (with before/after code examples)
+- Emphasizes: "Don't just describe what should be done - show the actual code"
+- Instructs to focus on implementation code and keep test analysis brief
 - Requests LINE-BY-LINE FEEDBACK format: `filename:line severity "comment"`
 - Severity levels: PEDANTIC, LOW, MEDIUM, HIGH
+- GitHub links included for each line to enable direct navigation to the code
 - Generates COPY-PASTE SUMMARY section for posting as review comments
 
 The function invokes Claude via stdin to avoid shell argument length limits:
@@ -118,11 +126,17 @@ The tool uses a specific prompt structure that you should maintain when modifyin
 3. Patch content: Either embedded or via `git diff` instruction
 4. Existing comments/reviews: Formatted with separators and attribution (if available)
 5. Instruction to consider existing feedback
-6. Standard review questions (improvements, duplication, performance, bugs)
-7. LINE-BY-LINE FEEDBACK format specification
-8. COPY-PASTE SUMMARY section for posting
+6. Directive prompts requiring concrete proposals with code examples:
+   - Propose specific improvements (with exact code snippets)
+   - Identify and suggest how to reduce duplication (show the refactored code)
+   - Propose performance improvements (include concrete examples)
+   - Identify bugs/edge cases and suggest fixes (provide the actual code fix)
+   - Propose refactoring with concrete changes (show before/after code examples)
+7. Emphasis on concrete code: "For every issue or improvement you identify, provide concrete code examples showing exactly how to fix it. Don't just describe what should be done - show the actual code."
+8. LINE-BY-LINE FEEDBACK format specification
+9. COPY-PASTE SUMMARY section for posting
 
-This format ensures consistency with the Firefox extension and provides structured output that can be copy-pasted into review tools.
+This format ensures consistency with the Firefox extension and provides structured output that can be copy-pasted into review tools. The prompts use imperative language ("Propose", "Identify", "Suggest") and **require actual code examples** for every suggestion, not just descriptions.
 
 ## Special Considerations
 

@@ -401,17 +401,28 @@ def analyze_with_claude(
         base_prompt += "\nPlease consider the above existing comments/reviews when providing your analysis.\n\n"
 
     # Add common review instructions
-    base_prompt += f"""Analyze the patch overall and answer these questions:
-{REVIEW_QUESTIONS}
+    base_prompt += """Analyze the patch overall and answer these questions:
+* What does this patch do? Provide a brief summary.
+* Propose specific improvements to this patch. Be concrete and actionable - provide exact code snippets showing how to implement the improvements.
+* Identify and suggest how to reduce any code duplication. Show the exact refactored code.
+* Propose specific performance improvements if applicable. Include concrete code examples.
+* Identify potential bugs or edge cases not handled, and suggest how to fix them. Provide the actual code fix.
+* Propose refactoring opportunities that would improve code quality, readability, or maintainability. Show before/after code examples with the concrete changes.
+
+IMPORTANT: For every issue or improvement you identify, provide concrete code examples showing exactly how to fix it. Don't just describe what should be done - show the actual code.
+
+Note: Focus your analysis on the implementation code. Keep test analysis brief - only mention critical issues in test code.
+"""
 
 At the end of the output, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
 filename:line_number severity "comment"
-Try to give some severity information: "PEDANTIC", "LOW", "MEDIUM" or "HIGH"
+
+Severity levels: "PEDANTIC", "LOW", "MEDIUM", "HIGH"
 
 Only include lines that have problems, potential bugs, improvements needed, pedantic, deduplication or other issues.
 For example:
 src/main.rs:45 LOW "Consider using unwrap_or_else() instead of unwrap() to handle potential errors"
-lib/parser.rs:123 HIGH "This variable name 'x' is not descriptive, consider a more meaningful name"
+lib/parser.rs:123 HIGH "This variable name 'x' is not descriptive"
 
 If there are no issues with specific lines, just write "No line-specific issues found."
 
@@ -614,15 +625,27 @@ Here is the patch content:
             base_prompt += existing_comments
             base_prompt += "\nPlease consider the above existing comments/reviews when providing your analysis.\n\n"
 
-        base_prompt += f"""First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
-filename:line_number "comment"
+        base_prompt += """First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
+filename:line_number severity "comment"
+
+Severity levels: "PEDANTIC", "LOW", "MEDIUM", "HIGH"
+"""
 
 Only include lines that have problems, potential bugs, improvements needed, or other issues.
 
 If there are no issues with specific lines, just write "No line-specific issues found."
 
 Then analyze the patch overall and answer these questions:
-{REVIEW_QUESTIONS}"""
+* What does this patch do? Provide a brief summary.
+* Propose specific improvements to this patch. Be concrete and actionable - provide exact code snippets showing how to implement the improvements.
+* Identify and suggest how to reduce any code duplication. Show the exact refactored code.
+* Propose specific performance improvements if applicable. Include concrete code examples.
+* Identify potential bugs or edge cases not handled, and suggest how to fix them. Provide the actual code fix.
+* Propose refactoring opportunities that would improve code quality, readability, or maintainability. Show before/after code examples with the concrete changes.
+
+IMPORTANT: For every issue or improvement you identify, provide concrete code examples showing exactly how to fix it. Don't just describe what should be done - show the actual code.
+
+Note: Focus your analysis on the implementation code. Keep test analysis brief - only mention critical issues in test code."""
 
         if args.questions:
             base_prompt += f"\n\nAdditional questions:\n{args.questions}"
