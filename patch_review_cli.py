@@ -412,7 +412,6 @@ def analyze_with_claude(
 IMPORTANT: For every issue or improvement you identify, provide concrete code examples showing exactly how to fix it. Don't just describe what should be done - show the actual code.
 
 Note: Focus your analysis on the implementation code. Keep test analysis brief - only mention critical issues in test code.
-"""
 
 At the end of the output, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
 filename:line_number severity "comment"
@@ -629,7 +628,6 @@ Here is the patch content:
 filename:line_number severity "comment"
 
 Severity levels: "PEDANTIC", "LOW", "MEDIUM", "HIGH"
-"""
 
 Only include lines that have problems, potential bugs, improvements needed, or other issues.
 
