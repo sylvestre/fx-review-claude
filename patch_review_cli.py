@@ -14,6 +14,11 @@ from urllib.parse import urlparse
 import requests
 from typing import Optional, Tuple
 
+REVIEW_QUESTIONS = """* Are there any potential improvements to this patch?
+* Is there any code duplication that could be reduced?
+* Are there any potential performance improvements?
+* Are there any potential bugs or edge cases not handled?"""
+
 
 def run_command(cmd, cwd=None, capture=True):
     """Run a shell command and optionally capture output."""
@@ -396,11 +401,8 @@ def analyze_with_claude(
         base_prompt += "\nPlease consider the above existing comments/reviews when providing your analysis.\n\n"
 
     # Add common review instructions
-    base_prompt += """Analyze the patch overall and answer these questions:
-* Are there any potential improvements to this patch?
-* Is there any code duplication that could be reduced?
-* Are there any potential performance improvements?
-* Are there any potential bugs or edge cases not handled?
+    base_prompt += f"""Analyze the patch overall and answer these questions:
+{REVIEW_QUESTIONS}
 
 At the end of the output, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
 filename:line_number severity "comment"
@@ -613,7 +615,7 @@ Here is the patch content:
             base_prompt += existing_comments
             base_prompt += "\nPlease consider the above existing comments/reviews when providing your analysis.\n\n"
 
-        base_prompt += """First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
+        base_prompt += f"""First, provide LINE-BY-LINE FEEDBACK for ISSUES ONLY (no positive feedback) in this format:
 filename:line_number "comment"
 
 Only include lines that have problems, potential bugs, improvements needed, or other issues.
@@ -621,10 +623,7 @@ Only include lines that have problems, potential bugs, improvements needed, or o
 If there are no issues with specific lines, just write "No line-specific issues found."
 
 Then analyze the patch overall and answer these questions:
-* Are there any potential improvements to this patch?
-* Is there any code duplication that could be reduced?
-* Are there any potential performance improvements?
-* Are there any potential bugs or edge cases not handled?"""
+{REVIEW_QUESTIONS}"""
 
         if args.questions:
             base_prompt += f"\n\nAdditional questions:\n{args.questions}"
