@@ -397,7 +397,6 @@ def analyze_with_claude(
 
     # Add common review instructions
     base_prompt += """Analyze the patch overall and answer these questions:
-* What does this patch do? Provide a brief summary.
 * Are there any potential improvements to this patch?
 * Is there any code duplication that could be reduced?
 * Are there any potential performance improvements?
@@ -622,7 +621,6 @@ Only include lines that have problems, potential bugs, improvements needed, or o
 If there are no issues with specific lines, just write "No line-specific issues found."
 
 Then analyze the patch overall and answer these questions:
-* What does this patch do? Provide a brief summary.
 * Are there any potential improvements to this patch?
 * Is there any code duplication that could be reduced?
 * Are there any potential performance improvements?
