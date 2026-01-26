@@ -425,7 +425,6 @@ If there are no issues with specific lines, just write "No line-specific issues 
 At the end, please provide a SIMPLIFIED SUMMARY section with:
 --- COPY-PASTE SUMMARY START ---
 [A concise review summary that can be posted as a comment, including:
-- Brief description of what the patch does
 - Key findings (improvements needed, bugs, performance issues)
 - Overall assessment (LGTM with minor suggestions / Needs changes / etc.)
 ]
