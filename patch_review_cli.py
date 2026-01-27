@@ -494,6 +494,8 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
 
         print("\n" + "=" * 80)
         print("Analysis complete")
+        print(f"\nReviewed patch: {url}")
+        print("=" * 80)
 
     finally:
         # Always preserve the prompt file for follow-up questions
@@ -665,6 +667,8 @@ Note: Focus your analysis on the implementation code. Keep test analysis brief -
             if result.returncode == 0:
                 print("\n" + "=" * 80)
                 print("Analysis complete")
+                print(f"\nReviewed patch: {args.url}")
+                print("=" * 80)
             else:
                 print(f"\nError: Claude failed with return code {result.returncode}")
                 print(f"Prompt saved to: {prompt_temp_file_path}")
