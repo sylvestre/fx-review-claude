@@ -40,6 +40,14 @@ def run_command(cmd, cwd=None, capture=True):
         return None
 
 
+def print_completion_message(url: str):
+    """Print analysis completion message with the reviewed patch URL."""
+    print("\n" + "=" * 80)
+    print("Analysis complete")
+    print(f"\nReviewed patch: {url}")
+    print("=" * 80)
+
+
 def get_repo_info_from_url(url: str) -> Optional[Tuple[str, str, str]]:
     """Extract repository information from GitHub/Phabricator URL."""
     parsed_url = urlparse(url)
@@ -492,10 +500,7 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
             )
             return
 
-        print("\n" + "=" * 80)
-        print("Analysis complete")
-        print(f"\nReviewed patch: {url}")
-        print("=" * 80)
+        print_completion_message(url)
 
     finally:
         # Always preserve the prompt file for follow-up questions
@@ -665,10 +670,7 @@ Note: Focus your analysis on the implementation code. Keep test analysis brief -
 
             result = subprocess.run(["claude", "--print"], input=base_prompt, text=True)
             if result.returncode == 0:
-                print("\n" + "=" * 80)
-                print("Analysis complete")
-                print(f"\nReviewed patch: {args.url}")
-                print("=" * 80)
+                print_completion_message(args.url)
             else:
                 print(f"\nError: Claude failed with return code {result.returncode}")
                 print(f"Prompt saved to: {prompt_temp_file_path}")
