@@ -372,6 +372,57 @@ def apply_patch(patch_content: str, repo_path: str, create_branch: bool = True) 
         os.unlink(patch_file)
 
 
+def run_interactive_followup(repo_path: str, url: str) -> None:
+    """Run interactive follow-up session for asking additional questions."""
+    print("\n" + "=" * 80)
+    print("INTERACTIVE FOLLOW-UP MODE")
+    print("=" * 80)
+    print("You can now ask follow-up questions about the patch.")
+    print("Type your question and press Enter. Type 'exit' or 'quit' to finish.")
+    print("=" * 80 + "\n")
+
+    while True:
+        try:
+            # Prompt for user input
+            user_input = input("\nYour question (or 'exit' to quit): ").strip()
+
+            if not user_input:
+                continue
+
+            # Check for exit commands
+            if user_input.lower() in ["exit", "quit", "q", "done"]:
+                print("\nExiting interactive mode...")
+                print_completion_message(url)
+                break
+
+            # Run Claude with the follow-up question
+            print("\n" + "=" * 80)
+            print("CLAUDE RESPONSE:")
+            print("=" * 80 + "\n")
+
+            result = subprocess.run(
+                ["claude", "--print"],
+                input=user_input,
+                text=True,
+                cwd=repo_path,
+                timeout=300,
+            )
+
+            if result.returncode != 0:
+                print(f"\nWarning: Claude returned with code {result.returncode}")
+
+        except KeyboardInterrupt:
+            print("\n\nInterrupted by user. Exiting...")
+            print_completion_message(url)
+            break
+        except subprocess.TimeoutExpired:
+            print("\nError: Claude timed out after 5 minutes")
+            print("You can try asking a simpler question or exit.")
+        except Exception as e:
+            print(f"\nError running Claude: {e}")
+            print("You can try again or type 'exit' to quit.")
+
+
 def analyze_with_claude(
     repo_path: str,
     language: str,
@@ -502,6 +553,9 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
 
         print_completion_message(url)
 
+        # Enter interactive follow-up mode
+        run_interactive_followup(repo_path, url)
+
     finally:
         # Always preserve the prompt file for follow-up questions
         persistent_prompt_path = os.path.join(
@@ -514,10 +568,6 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
             shutil.copy2(prompt_file_path, persistent_prompt_path)
             os.unlink(prompt_file_path)  # Clean up the temp file
             print(f"\nPrompt saved to: {persistent_prompt_path}")
-            print(
-                f'For follow-up questions, run: cd {repo_path} && claude --print "$(cat {persistent_prompt_path})"'
-            )
-            print("Or simply: claude (and paste the prompt content)")
         except Exception as e:
             print(f"\nWarning: Could not save prompt to repo directory: {e}")
             print(f"Prompt remains at: {prompt_file_path}")
@@ -671,6 +721,50 @@ Note: Focus your analysis on the implementation code. Keep test analysis brief -
             result = subprocess.run(["claude", "--print"], input=base_prompt, text=True)
             if result.returncode == 0:
                 print_completion_message(args.url)
+
+                # Enter interactive follow-up mode (without repo context)
+                print("\n" + "=" * 80)
+                print("INTERACTIVE FOLLOW-UP MODE (Limited Context)")
+                print("=" * 80)
+                print("You can ask follow-up questions, but without repository checkout,")
+                print("Claude will only have the patch content for context.")
+                print("Type your question and press Enter. Type 'exit' or 'quit' to finish.")
+                print("=" * 80 + "\n")
+
+                while True:
+                    try:
+                        user_input = input("\nYour question (or 'exit' to quit): ").strip()
+
+                        if not user_input:
+                            continue
+
+                        if user_input.lower() in ["exit", "quit", "q", "done"]:
+                            print("\nExiting interactive mode...")
+                            print_completion_message(args.url)
+                            break
+
+                        print("\n" + "=" * 80)
+                        print("CLAUDE RESPONSE:")
+                        print("=" * 80 + "\n")
+
+                        result = subprocess.run(
+                            ["claude", "--print"],
+                            input=user_input,
+                            text=True,
+                            timeout=300,
+                        )
+
+                        if result.returncode != 0:
+                            print(f"\nWarning: Claude returned with code {result.returncode}")
+
+                    except KeyboardInterrupt:
+                        print("\n\nInterrupted by user. Exiting...")
+                        print_completion_message(args.url)
+                        break
+                    except subprocess.TimeoutExpired:
+                        print("\nError: Claude timed out after 5 minutes")
+                    except Exception as e:
+                        print(f"\nError running Claude: {e}")
             else:
                 print(f"\nError: Claude failed with return code {result.returncode}")
                 print(f"Prompt saved to: {prompt_temp_file_path}")
