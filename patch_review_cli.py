@@ -4,11 +4,13 @@ Patch review CLI tool that checkouts repos, applies patches, and analyzes them u
 """
 
 import argparse
+import hashlib
 import os
 import re
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 import requests
@@ -46,6 +48,77 @@ def print_completion_message(url: str):
     print("Analysis complete")
     print(f"\nReviewed patch: {url}")
     print("=" * 80)
+
+
+def get_review_filename(repo_path: Optional[str], url: str) -> str:
+    """Generate a consistent filename for storing review results."""
+    # Extract PR/commit identifier from URL
+    pr_match = re.search(r'/pull/(\d+)', url)
+    commit_match = re.search(r'/commit/([a-f0-9]+)', url)
+    phab_match = re.search(r'/D(\d+)', url)
+
+    # Determine reviews directory
+    if repo_path:
+        reviews_dir = Path(repo_path) / ".reviews"
+    else:
+        # Use cache directory for no-checkout mode
+        cache_home = os.environ.get('XDG_CACHE_HOME', str(Path.home() / '.cache'))
+        reviews_dir = Path(cache_home) / "patch-review-cli" / "reviews"
+
+    reviews_dir.mkdir(parents=True, exist_ok=True)
+
+    if pr_match:
+        identifier = f"pr-{pr_match.group(1)}"
+    elif commit_match:
+        identifier = f"commit-{commit_match.group(1)[:8]}"
+    elif phab_match:
+        identifier = f"phab-D{phab_match.group(1)}"
+    else:
+        # Fallback: hash the URL
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+        identifier = f"review-{url_hash}"
+
+    return str(reviews_dir / f"{identifier}-latest.txt")
+
+
+def load_previous_review(repo_path: Optional[str], url: str) -> Optional[str]:
+    """Load previous review results if they exist."""
+    review_file = get_review_filename(repo_path, url)
+
+    if os.path.exists(review_file):
+        try:
+            with open(review_file, 'r') as f:
+                content = f.read()
+
+            # Get file modification time
+            mtime = os.path.getmtime(review_file)
+            review_date = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+
+            print(f"\nFound previous review from {review_date}")
+            print(f"Review file: {review_file}\n")
+
+            return content
+        except Exception as e:
+            print(f"Warning: Failed to load previous review: {e}")
+
+    return None
+
+
+def save_review_output(repo_path: Optional[str], url: str, output: str) -> None:
+    """Save review output to a file."""
+    review_file = get_review_filename(repo_path, url)
+
+    try:
+        # Add timestamp header
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        header = f"Review generated: {timestamp}\nPatch URL: {url}\n\n" + "=" * 80 + "\n\n"
+
+        with open(review_file, 'w') as f:
+            f.write(header + output)
+
+        print(f"\nReview saved to: {review_file}")
+    except Exception as e:
+        print(f"\nWarning: Failed to save review output: {e}")
 
 
 def get_repo_info_from_url(url: str) -> Optional[Tuple[str, str, str]]:
@@ -432,6 +505,9 @@ def analyze_with_claude(
     existing_comments: Optional[str] = None,
 ) -> None:
     """Run Claude Code to analyze the repository changes."""
+    # Load previous review if it exists
+    previous_review = load_previous_review(repo_path, url)
+
     # Build the base prompt with common instructions
     base_prompt = (
         f"I am a {language} developer, I need to review this patch from: {url}\n\n"
@@ -453,6 +529,17 @@ def analyze_with_claude(
             print("No changes found to analyze")
             return
         base_prompt += "Load the current changes with 'git diff' and analyze them.\n\n"
+
+    # Add previous review if available
+    if previous_review:
+        base_prompt += "\n" + "=" * 80 + "\n"
+        base_prompt += "PREVIOUS REVIEW:\n"
+        base_prompt += "=" * 80 + "\n\n"
+        base_prompt += previous_review
+        base_prompt += "\n\n" + "=" * 80 + "\n"
+        base_prompt += "Please compare the current patch with the previous review above.\n"
+        base_prompt += "Note any improvements made, remaining issues, and new concerns.\n"
+        base_prompt += "=" * 80 + "\n\n"
 
     # Add existing comments/reviews if available
     if existing_comments:
@@ -516,7 +603,9 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
             prompt_content = f.read()
 
         success = False
-        # Try direct invocation without capturing output - let it display directly
+        captured_output = []
+
+        # Try direct invocation while capturing output for storage
         try:
             print("Running: claude --print with prompt via stdin")
             print(f"Prompt length: {len(prompt_content)} characters")
@@ -524,19 +613,34 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
             print("CLAUDE ANALYSIS OUTPUT:")
             print("=" * 80 + "\n")
 
-            result = subprocess.run(
+            # Use Popen to capture output while displaying it
+            process = subprocess.Popen(
                 ["claude", "--print"],
-                input=prompt_content,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
                 cwd=repo_path,
-                timeout=300,
             )
 
-            success = result.returncode == 0
+            # Write input and close stdin
+            process.stdin.write(prompt_content)
+            process.stdin.close()
+
+            # Read and display output line by line while capturing
+            for line in process.stdout:
+                print(line, end='')
+                captured_output.append(line)
+
+            process.wait(timeout=300)
+            success = process.returncode == 0
+
             if not success:
-                print(f"\nClaude failed with return code {result.returncode}")
+                print(f"\nClaude failed with return code {process.returncode}")
         except subprocess.TimeoutExpired:
             print("\nClaude timed out after 5 minutes")
+            if process:
+                process.kill()
         except FileNotFoundError:
             print(
                 "\nError: 'claude' command not found. Please ensure Claude Code CLI is installed."
@@ -552,6 +656,11 @@ At the end, please provide a SIMPLIFIED SUMMARY section with:
             return
 
         print_completion_message(url)
+
+        # Save the review output
+        if success and captured_output:
+            review_text = ''.join(captured_output)
+            save_review_output(repo_path, url, review_text)
 
         # Enter interactive follow-up mode
         run_interactive_followup(repo_path, url)
@@ -667,6 +776,9 @@ def main():
             f.write(patch_content)
             patch_file = f.name
 
+        # Load previous review if it exists
+        previous_review = load_previous_review(None, args.url)
+
         base_prompt = f"""I am a {args.language} developer, I need to review this patch.
 
 Here is the patch content:
@@ -675,6 +787,17 @@ Here is the patch content:
 ```
 
 """
+
+        # Add previous review if available
+        if previous_review:
+            base_prompt += "\n" + "=" * 80 + "\n"
+            base_prompt += "PREVIOUS REVIEW:\n"
+            base_prompt += "=" * 80 + "\n\n"
+            base_prompt += previous_review
+            base_prompt += "\n\n" + "=" * 80 + "\n"
+            base_prompt += "Please compare the current patch with the previous review above.\n"
+            base_prompt += "Note any improvements made, remaining issues, and new concerns.\n"
+            base_prompt += "=" * 80 + "\n\n"
 
         # Add existing comments if available
         if existing_comments:
@@ -718,9 +841,35 @@ Note: Focus your analysis on the implementation code. Keep test analysis brief -
             print("CLAUDE ANALYSIS OUTPUT:")
             print("=" * 80 + "\n")
 
-            result = subprocess.run(["claude", "--print"], input=base_prompt, text=True)
-            if result.returncode == 0:
+            captured_output = []
+
+            # Use Popen to capture output while displaying it
+            process = subprocess.Popen(
+                ["claude", "--print"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+
+            # Write input and close stdin
+            process.stdin.write(base_prompt)
+            process.stdin.close()
+
+            # Read and display output line by line while capturing
+            for line in process.stdout:
+                print(line, end='')
+                captured_output.append(line)
+
+            process.wait(timeout=300)
+
+            if process.returncode == 0:
                 print_completion_message(args.url)
+
+                # Save the review output
+                if captured_output:
+                    review_text = ''.join(captured_output)
+                    save_review_output(None, args.url, review_text)
 
                 # Enter interactive follow-up mode (without repo context)
                 print("\n" + "=" * 80)
@@ -766,9 +915,15 @@ Note: Focus your analysis on the implementation code. Keep test analysis brief -
                     except Exception as e:
                         print(f"\nError running Claude: {e}")
             else:
-                print(f"\nError: Claude failed with return code {result.returncode}")
+                print(f"\nError: Claude failed with return code {process.returncode}")
                 print(f"Prompt saved to: {prompt_temp_file_path}")
                 print(f"Please manually run: claude --print < {prompt_temp_file_path}")
+        except subprocess.TimeoutExpired:
+            print("\nError: Claude timed out after 5 minutes")
+            if 'process' in locals():
+                process.kill()
+        except FileNotFoundError:
+            print("\nError: 'claude' command not found. Please ensure Claude Code CLI is installed.")
         except Exception as e:
             print(f"Error running Claude Code: {e}", file=sys.stderr)
             print(f"Please manually run: claude --print < {prompt_temp_file_path}")
