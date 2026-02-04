@@ -57,14 +57,8 @@ def get_review_filename(repo_path: Optional[str], url: str) -> str:
     commit_match = re.search(r'/commit/([a-f0-9]+)', url)
     phab_match = re.search(r'/D(\d+)', url)
 
-    # Determine reviews directory
-    if repo_path:
-        reviews_dir = Path(repo_path) / ".reviews"
-    else:
-        # Use cache directory for no-checkout mode
-        cache_home = os.environ.get('XDG_CACHE_HOME', str(Path.home() / '.cache'))
-        reviews_dir = Path(cache_home) / "patch-review-cli" / "reviews"
-
+    # Store reviews in current working directory
+    reviews_dir = Path.cwd() / "reviews"
     reviews_dir.mkdir(parents=True, exist_ok=True)
 
     if pr_match:
