@@ -52,21 +52,29 @@ def print_completion_message(url: str):
 
 def get_review_filename(repo_path: Optional[str], url: str) -> str:
     """Generate a consistent filename for storing review results."""
-    # Extract PR/commit identifier from URL
-    pr_match = re.search(r'/pull/(\d+)', url)
-    commit_match = re.search(r'/commit/([a-f0-9]+)', url)
+    # Extract project name and identifier from URL
+    github_match = re.match(r'https://github\.com/([^/]+)/([^/]+)/(pull|commit)/(.+?)(?:\?|$|#)', url)
     phab_match = re.search(r'/D(\d+)', url)
 
     # Store reviews in current working directory
     reviews_dir = Path.cwd() / "reviews"
     reviews_dir.mkdir(parents=True, exist_ok=True)
 
-    if pr_match:
-        identifier = f"pr-{pr_match.group(1)}"
-    elif commit_match:
-        identifier = f"commit-{commit_match.group(1)[:8]}"
+    if github_match:
+        owner = github_match.group(1)
+        repo = github_match.group(2)
+        pr_type = github_match.group(3)  # 'pull' or 'commit'
+        pr_id = github_match.group(4)
+
+        # Sanitize repo name (remove .git suffix if present)
+        repo = repo.replace('.git', '')
+
+        if pr_type == 'pull':
+            identifier = f"{owner}-{repo}-pr-{pr_id}"
+        else:  # commit
+            identifier = f"{owner}-{repo}-commit-{pr_id[:8]}"
     elif phab_match:
-        identifier = f"phab-D{phab_match.group(1)}"
+        identifier = f"mozilla-firefox-phab-D{phab_match.group(1)}"
     else:
         # Fallback: hash the URL
         url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
